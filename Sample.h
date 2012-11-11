@@ -19,16 +19,12 @@
 #define _FFTCONVOLVER_SAMPLE_H
 
 #include "Buffer.h"
-#include "Configuration.h"
-
-#include <cstddef>
 
 
 namespace fftconvolver
 {
 
 typedef float Sample;
-
 
 typedef Buffer<Sample> SampleBuffer;
   

@@ -23,7 +23,11 @@
 #include <cmath>
 
 
-#if defined (__SSE__)
+#include <Accelerate/Accelerate.h>
+//#include <vecLib/vDSP.h>
+
+
+#if defined (FFTCONVOLVER_USE_SSE)
   #include <xmmintrin.h>
 #endif
 
@@ -40,7 +44,7 @@ void MultiplyAdd(Sample* FFTCONVOLVER_RESTRICT re,
                  const Sample* FFTCONVOLVER_RESTRICT imB,
                  const size_t len)
 {
-#if defined(__SSE__)
+#if defined(FFTCONVOLVER_USE_SSE)
   const size_t end4 = 4 * (len / 4);
   for (size_t i=0; i<end4; i+=4)
   {

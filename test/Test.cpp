@@ -24,6 +24,7 @@
 #include <cstdlib>
 
 #include "../FFTConvolver.h"
+#include "../TwoStageFFTConvolver.h"
 #include "../MultiplyAdd.h"
 
 
@@ -76,7 +77,7 @@ static bool TestConvolver(size_t inputSize,
   std::vector<fftconvolver::Sample> in(inputSize);
   for (size_t i=0; i<inputSize; ++i)
   {
-    in[i] = static_cast<float>(::cos(static_cast<float>(i) / 123.0));
+    in[i] = static_cast<float>(::cos(static_cast<double>(i)) * (1.0 / 123.0));
   }
   
   std::vector<fftconvolver::Sample> ir(irSize);
@@ -136,23 +137,111 @@ static bool TestConvolver(size_t inputSize,
         ++diffSamples;
       }
     }
-    printf("Correctness Test (input %zu, IR %zu, blocksize %zu-%zu) => %s\n", inputSize, irSize, blockSizeMin, blockSizeMax, (diffSamples == 0) ? "[OK]" : "[FAILED]");
+    printf("Correctness Test (2-stage, input %d, IR %d, blocksize %d-%d) => %s\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax), (diffSamples == 0) ? "[OK]" : "[FAILED]");
     return (diffSamples == 0);
   }
   else
   {
-    printf("Performance Test (input %zu, IR %zu, blocksize %zu-%zu) => Completed\n", inputSize, irSize, blockSizeMin, blockSizeMax);
+    printf("Performance Test (2-stage, input %d, IR %d, blocksize %d-%d) => Completed\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax));
     return true;
   }
 }
 
 
+static bool TestTwoStageConvolver(size_t inputSize,
+                                  size_t irSize,
+                                  size_t blockSizeMin,
+                                  size_t blockSizeMax,
+                                  size_t blockSizeHead,
+                                  size_t blockSizeTail,
+                                  bool refCheck)
+{
+  // Prepare input and IR
+  std::vector<fftconvolver::Sample> in(inputSize);
+  for (size_t i=0; i<inputSize; ++i)
+  {
+    in[i] = static_cast<float>(::cos(static_cast<double>(i)) * (1.0 / 123.0));
+  }
+  
+  std::vector<fftconvolver::Sample> ir(irSize);
+  for (size_t i=0; i<irSize; ++i)
+  {
+    ir[i] = static_cast<float>(::sin(static_cast<float>(i) / 79.0));
+  }
+  
+  // Simple convolver
+  std::vector<fftconvolver::Sample> outSimple(in.size() + ir.size() - 1, fftconvolver::Sample(0.0));
+  if (refCheck)
+  {
+    SimpleConvolve(&in[0], in.size(), &ir[0], ir.size(), &outSimple[0]);
+  }
+  
+  // Orgami convolver
+  std::vector<fftconvolver::Sample> out(in.size() + ir.size() - 1, fftconvolver::Sample(0.0));
+  {
+    fftconvolver::TwoStageFFTConvolver convolver;
+    convolver.init(blockSizeHead, blockSizeTail, &ir[0], ir.size());
+    std::vector<fftconvolver::Sample> inBuf(blockSizeMax);
+    size_t processedOut = 0;
+    size_t processedIn = 0;
+    while (processedOut < out.size())
+    {
+      const size_t blockSize = blockSizeMin + (static_cast<size_t>(rand()) % (1+(blockSizeMax-blockSizeMin))); 
+      
+      const size_t remainingOut = out.size() - processedOut;
+      const size_t remainingIn = in.size() - processedIn;
+      
+      const size_t processingOut = std::min(remainingOut, blockSize);
+      const size_t processingIn = std::min(remainingIn, blockSize);
+      
+      memset(&inBuf[0], 0, inBuf.size() * sizeof(fftconvolver::Sample));
+      if (processingIn > 0)
+      {
+        memcpy(&inBuf[0], &in[processedIn], processingIn * sizeof(fftconvolver::Sample));
+      }
+      
+      convolver.process(&inBuf[0], &out[processedOut], processingOut);
+      
+      processedOut += processingOut;
+      processedIn += processingIn;
+    }
+  }
+  
+  if (refCheck)
+  {
+    size_t diffSamples = 0;
+    for (size_t i=0; i<outSimple.size(); ++i)
+    {
+      const fftconvolver::Sample a = out[i];
+      const fftconvolver::Sample b = outSimple[i];
+      
+      if (::fabs(a-b) > 0.05)
+      {
+        ++diffSamples;
+      }
+    }
+    printf("Correctness Test (2-stage, input %d, IR %d, blocksize %d-%d) => %s\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax), (diffSamples == 0) ? "[OK]" : "[FAILED]");
+    return (diffSamples == 0);
+  }
+  else
+  {
+    printf("Performance Test (2-stage, input %d, IR %d, blocksize %d-%d) => Completed\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax));
+    return true;
+  }
+}
+
+
+#define TEST_PERFORMANCE
+//#define TEST_CORRECTNESS
+
+
+//#define TEST_FFTCONVOLVER
+#define TEST_TWOSTAGEFFTCONVOLVER
+
 
 int main()
 { 
-  // Correctness
-#define TEST_CORRECTNESS
-#ifdef TEST_CORRECTNESS
+#if defined(TEST_CORRECTNESS) && defined(TEST_FFTCONVOLVER)
   TestConvolver(1, 1, 1, 1, 1, true, new fftconvolver::MultiplyAddEngine());
   TestConvolver(2, 2, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
   TestConvolver(3, 3, 3, 3, 3, true, new fftconvolver::MultiplyAddEngine());
@@ -188,10 +277,51 @@ int main()
   TestConvolver(100000, 4321, 100, 2048, 2048, true, new fftconvolver::MultiplyAddEngine());
 #endif
   
-//#define TEST_PERFORMANCE
-#ifdef TEST_PERFORMANCE
-  // Performance
-  TestConvolver(60*44100, 5*44100, 50, 100, 1024, false, new fftconvolver::MultiplyAddEngine());
+
+#if defined(TEST_PERFORMANCE) && defined(TEST_FFTCONVOLVER)
+  TestConvolver(3*60*44100, 20*44100, 50, 100, 1024, false, new fftconvolver::MultiplyAddEngine());
+#endif
+
+
+#if defined(TEST_CORRECTNESS) && defined(TEST_TWOSTAGEFFTCONVOLVER)
+  TestTwoStageConvolver(1, 1, 1, 1, 1, 1, true);
+  TestTwoStageConvolver(2, 2, 2, 2, 2, 2, true);
+  TestTwoStageConvolver(3, 3, 3, 3, 3, 3, true);
+
+  TestTwoStageConvolver(3, 2, 2, 2, 2, 4, true);
+  TestTwoStageConvolver(4, 2, 2, 2, 2, 4, true);
+  TestTwoStageConvolver(4, 3, 2, 2, 2, 4, true);
+  TestTwoStageConvolver(9, 4, 3, 3, 2, 4, true);
+  TestTwoStageConvolver(171, 7, 5, 5, 5, 10,true);
+  TestTwoStageConvolver(1979, 17, 7, 7, 5, 10, true);
+  TestTwoStageConvolver(100, 10, 3, 5, 5, 10, true);
+  TestTwoStageConvolver(123, 45, 12, 34, 34, 68, true);
+
+  TestTwoStageConvolver(2, 3, 2, 2, 1, 2, true);
+  TestTwoStageConvolver(2, 4, 2, 2, 1, 2, true);
+  TestTwoStageConvolver(3, 4, 2, 2, 1, 2, true);
+  TestTwoStageConvolver(4, 9, 3, 3, 2, 4, true);
+  TestTwoStageConvolver(7, 171, 5, 5, 2, 16, true);
+  TestTwoStageConvolver(17, 1979, 7, 7, 4, 16, true);
+  TestTwoStageConvolver(10, 100, 3, 5, 1, 4, true);
+  TestTwoStageConvolver(45, 123, 12, 34, 4, 32, true);
+
+  TestTwoStageConvolver(100000, 1234, 100,  128,  128, 4096, true);
+  TestTwoStageConvolver(100000, 1234, 100,  256,  256, 4096, true);
+  TestTwoStageConvolver(100000, 1234, 100,  512,  512, 4096, true);
+  TestTwoStageConvolver(100000, 1234, 100, 1024, 1024, 4096, true);
+  TestTwoStageConvolver(100000, 1234, 100, 2048, 2048, 4096, true);
+
+  TestTwoStageConvolver(100000, 4321, 100,  128,  128, 4096, true);
+  TestTwoStageConvolver(100000, 4321, 100,  256,  256, 4096, true);
+  TestTwoStageConvolver(100000, 4321, 100,  512,  512, 4096, true);
+  TestTwoStageConvolver(100000, 4321, 100, 1024, 1024, 4096, true);
+  TestTwoStageConvolver(100000, 4321, 100, 2048, 2048, 4096, true);
+#endif
+
+
+#if defined(TEST_PERFORMANCE) && defined(TEST_TWOSTAGEFFTCONVOLVER)
+  TestTwoStageConvolver(3*60*44100, 20*44100, 50, 100, 100, 8192, false);
 #endif
   
   return 0;

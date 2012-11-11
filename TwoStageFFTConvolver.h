@@ -15,56 +15,46 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ==================================================================================
 
-#ifndef _FFTCONVOLVER_CONFIGURATION_H
-#define _FFTCONVOLVER_CONFIGURATION_H
+#ifndef _FFTCONVOLVER_TWOSTAGEFFTCONVOLVER_H
+#define _FFTCONVOLVER_TWOSTAGEFFTCONVOLVER_H
 
-
-#if defined(__SSE__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
-  #define FFTCONVOLVER_USE_SSE
-#endif
-
-
-#if defined (FFTCONVOLVER_USE_SSE)
-  #include <xmmintrin.h>
-#else
-  #include <new>
-#endif
+#include "FFTConvolver.h"
+#include "Sample.h"
 
 
 namespace fftconvolver
-{
-namespace internal
-{
+{ 
 
-#if defined(__GNUC__)
-  #define FFTCONVOLVER_RESTRICT __restrict__
-#else
-  #define FFTCONVOLVER_RESTRICT
-#endif
+class TwoStageFFTConvolver
+{  
+public:
+  TwoStageFFTConvolver();  
+  virtual ~TwoStageFFTConvolver();
+  
+  virtual void clear();
+  
+  virtual bool init(size_t headBlockSize,
+                    size_t tailBlockSize,
+                    const Sample* ir,
+                    size_t irLen);
+  
+  virtual void process(const Sample* input, Sample* output, size_t len);
 
-
-template<typename T>
-T* AllocateBuffer(size_t size)
-{
-#if defined(FFTCONVOLVER_USE_SSE)
-  return static_cast<T*>(_mm_malloc(size * sizeof(T), 64));
-#else
-  return new(std::nothrow) T[size];
-#endif
-}
-
-
-template<typename T>
-void DeallocateBuffer(T* ptr)
-{
-#if defined(FFTCONVOLVER_USE_SSE)
-  _mm_free(ptr);
-#else
-  delete [] ptr;
-#endif
-}
-
-} // End of namespace internal  
+protected:
+  virtual void scheduleTailConvolution();
+  virtual void waitForTailConvolution();
+  
+private:
+  size_t _headBlockSize;
+  size_t _tailBlockSize;
+  FFTConvolver _headConvolver;
+  FFTConvolver _tailConvolver;
+  SampleBuffer _tailInput;
+  SampleBuffer _tailOutput;
+  size_t _tailInputFill;
+  size_t _tailPos;
+};
+  
 } // End of namespace fftconvolver
 
 #endif // Header guard
