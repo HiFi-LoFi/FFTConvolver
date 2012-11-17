@@ -20,6 +20,7 @@
 
 #include "Configuration.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -100,6 +101,12 @@ public:
   const T* data() const
   {
     return _data;
+  }
+
+  static void Swap(Buffer<T>& a, Buffer<T>& b)
+  {
+    std::swap(a._data, b._data);
+    std::swap(a._size, b._size);
   }
   
 private:

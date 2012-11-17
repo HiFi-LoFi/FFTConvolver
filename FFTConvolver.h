@@ -38,17 +38,13 @@ public:
   FFTConvolver();  
   virtual ~FFTConvolver();
   
-  virtual void clear();
-  virtual bool init(size_t blockSize,
-                    const Sample* ir,
-                    size_t irLen,
-                    MultiplyAddEngine* muliplyAddEngine);
-  virtual void process(const Sample* input, Sample* output, size_t len);
+  bool init(size_t blockSize, const Sample* ir, size_t irLen);
+  void process(const Sample* input, Sample* output, size_t len);
+  void reset();
   
-protected:
-  virtual void multiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b) const;
-  
-private:  
+private:
+  void multiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b) const;
+
   size_t _blockSize;
   size_t _segSize;
   size_t _segCount;
@@ -63,8 +59,10 @@ private:
   size_t _current;
   SampleBuffer _inputBuffer;
   size_t _inputBufferFill;
-  MultiplyAddEngine* _multiplyAddEngine;
-  std::vector<MultiplyAddEngine::Pair> _preMultiplyAddPairs;
+
+  // Prevent uncontrolled usage
+  FFTConvolver(const FFTConvolver&);
+  FFTConvolver& operator=(const FFTConvolver&);
 };
   
 } // End of namespace fftconvolver

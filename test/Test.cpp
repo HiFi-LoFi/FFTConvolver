@@ -70,8 +70,7 @@ static bool TestConvolver(size_t inputSize,
                           size_t blockSizeMin,
                           size_t blockSizeMax,
                           size_t blockSizeConvolver,
-                          bool refCheck,
-                          fftconvolver::MultiplyAddEngine* multiplyAddEngine)
+                          bool refCheck)
 {
   // Prepare input and IR
   std::vector<fftconvolver::Sample> in(inputSize);
@@ -97,7 +96,7 @@ static bool TestConvolver(size_t inputSize,
   std::vector<fftconvolver::Sample> out(in.size() + ir.size() - 1, fftconvolver::Sample(0.0));
   {
     fftconvolver::FFTConvolver convolver;
-    convolver.init(blockSizeConvolver, &ir[0], ir.size(), multiplyAddEngine);
+    convolver.init(blockSizeConvolver, &ir[0], ir.size());
     std::vector<fftconvolver::Sample> inBuf(blockSizeMax);
     size_t processedOut = 0;
     size_t processedIn = 0;
@@ -176,7 +175,7 @@ static bool TestTwoStageConvolver(size_t inputSize,
     SimpleConvolve(&in[0], in.size(), &ir[0], ir.size(), &outSimple[0]);
   }
   
-  // Orgami convolver
+  // FFT convolver
   std::vector<fftconvolver::Sample> out(in.size() + ir.size() - 1, fftconvolver::Sample(0.0));
   {
     fftconvolver::TwoStageFFTConvolver convolver;
@@ -231,9 +230,8 @@ static bool TestTwoStageConvolver(size_t inputSize,
 }
 
 
-#define TEST_PERFORMANCE
-//#define TEST_CORRECTNESS
-
+#define TEST_CORRECTNESS
+//#define TEST_PERFORMANCE
 
 //#define TEST_FFTCONVOLVER
 #define TEST_TWOSTAGEFFTCONVOLVER
@@ -242,44 +240,44 @@ static bool TestTwoStageConvolver(size_t inputSize,
 int main()
 { 
 #if defined(TEST_CORRECTNESS) && defined(TEST_FFTCONVOLVER)
-  TestConvolver(1, 1, 1, 1, 1, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(2, 2, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(3, 3, 3, 3, 3, true, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(1, 1, 1, 1, 1, true);
+  TestConvolver(2, 2, 2, 2, 2, true);
+  TestConvolver(3, 3, 3, 3, 3, true);
   
-  TestConvolver(3, 2, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(4, 2, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(4, 3, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(9, 4, 3, 3, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(171, 7, 5, 5, 5, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(1979, 17, 7, 7, 5, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100, 10, 3, 5, 5, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(123, 45, 12, 34, 34, true, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(3, 2, 2, 2, 2, true);
+  TestConvolver(4, 2, 2, 2, 2, true);
+  TestConvolver(4, 3, 2, 2, 2, true);
+  TestConvolver(9, 4, 3, 3, 2, true);
+  TestConvolver(171, 7, 5, 5, 5, true);
+  TestConvolver(1979, 17, 7, 7, 5, true);
+  TestConvolver(100, 10, 3, 5, 5, true);
+  TestConvolver(123, 45, 12, 34, 34, true);
   
-  TestConvolver(2, 3, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(2, 4, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(3, 4, 2, 2, 2, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(4, 9, 3, 3, 3, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(7, 171, 5, 5, 5, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(17, 1979, 7, 7, 7, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(10, 100, 3, 5, 5, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(45, 123, 12, 34, 34, true, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(2, 3, 2, 2, 2, true);
+  TestConvolver(2, 4, 2, 2, 2, true);
+  TestConvolver(3, 4, 2, 2, 2, true);
+  TestConvolver(4, 9, 3, 3, 3, true);
+  TestConvolver(7, 171, 5, 5, 5, true);
+  TestConvolver(17, 1979, 7, 7, 7, true);
+  TestConvolver(10, 100, 3, 5, 5, true);
+  TestConvolver(45, 123, 12, 34, 34, true);
   
-  TestConvolver(100000, 1234, 100,  128,  128, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 1234, 100,  256,  256, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 1234, 100,  512,  512, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 1234, 100, 1024, 1024, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 1234, 100, 2048, 2048, true, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(100000, 1234, 100,  128,  128, true);
+  TestConvolver(100000, 1234, 100,  256,  256, true);
+  TestConvolver(100000, 1234, 100,  512,  512, true);
+  TestConvolver(100000, 1234, 100, 1024, 1024, true);
+  TestConvolver(100000, 1234, 100, 2048, 2048, true);
   
-  TestConvolver(100000, 4321, 100,  128,  128, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 4321, 100,  256,  256, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 4321, 100,  512,  512, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 4321, 100, 1024, 1024, true, new fftconvolver::MultiplyAddEngine());
-  TestConvolver(100000, 4321, 100, 2048, 2048, true, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(100000, 4321, 100,  128,  128, true);
+  TestConvolver(100000, 4321, 100,  256,  256, true);
+  TestConvolver(100000, 4321, 100,  512,  512, true);
+  TestConvolver(100000, 4321, 100, 1024, 1024, true);
+  TestConvolver(100000, 4321, 100, 2048, 2048, true);
 #endif
   
 
 #if defined(TEST_PERFORMANCE) && defined(TEST_FFTCONVOLVER)
-  TestConvolver(3*60*44100, 20*44100, 50, 100, 1024, false, new fftconvolver::MultiplyAddEngine());
+  TestConvolver(3*60*44100, 20*44100, 50, 100, 1024, false);
 #endif
 
 
@@ -321,7 +319,7 @@ int main()
 
 
 #if defined(TEST_PERFORMANCE) && defined(TEST_TWOSTAGEFFTCONVOLVER)
-  TestTwoStageConvolver(3*60*44100, 20*44100, 50, 100, 100, 8192, false);
+  TestTwoStageConvolver(3*60*44100, 20*44100, 50, 100, 100, 2*8192, false);
 #endif
   
   return 0;

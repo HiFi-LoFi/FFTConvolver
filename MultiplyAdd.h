@@ -36,42 +36,6 @@ void MultiplyAdd(Sample* FFTCONVOLVER_RESTRICT re,
                  const Sample* FFTCONVOLVER_RESTRICT imB,
                  const size_t len);
 
-
-// ======================================================
-  
-  
-class MultiplyAddEngine
-{
-public:
-  MultiplyAddEngine();
-  virtual ~MultiplyAddEngine();
-    
-  virtual void init(const std::vector<SplitComplex*>& ir);
-  
-  virtual void setAudio(size_t index, const SplitComplex& audio);
-  
-  struct Pair
-  {
-    size_t indexIr;
-    size_t indexAudio;
-  };
-  
-  virtual void multiplyAdd(const std::vector<Pair>& pairs);
-
-  virtual const SplitComplex& getResult();
-  
-private:
-  void clear();
-  
-  std::vector<SplitComplex*> _ir;
-  std::vector<SplitComplex*> _audio;
-  SplitComplex _result;
-  
-  // Prevent uncontrolled usage
-  MultiplyAddEngine(const MultiplyAddEngine&);
-  MultiplyAddEngine& operator=(const MultiplyAddEngine&);
-};
-
 } // End of namespace fftconvolver
 
 #endif // Header guard

@@ -90,7 +90,7 @@ public:
   {
     return _size;
   }
-  
+    
 private:
   size_t _size;
   SampleBuffer _re;

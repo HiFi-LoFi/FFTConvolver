@@ -71,7 +71,7 @@ void CopyAndPad(Buffer<T>& dest, const T* src, size_t srcSize)
   ::memcpy(dest, src, srcSize * sizeof(T));
   ::memset(dest + srcSize, 0, (dest.size()-srcSize) * sizeof(T)); 
 }
-  
+
 } // End of namespace internal
 
   
@@ -90,24 +90,19 @@ FFTConvolver::FFTConvolver() :
   _overlap(),
   _current(0),
   _inputBuffer(),
-  _inputBufferFill(0),
-  _multiplyAddEngine(0),
-  _preMultiplyAddPairs()
+  _inputBufferFill(0)
 {
 }
 
   
 FFTConvolver::~FFTConvolver()
 {
-  FFTConvolver::clear();
+  reset();
 }
 
   
-void FFTConvolver::clear()
-{
-  delete _multiplyAddEngine;
-  _multiplyAddEngine = 0;
-  
+void FFTConvolver::reset()
+{  
   for (size_t i=0; i<_segCount; ++i)
   {
     delete _segments[i];
@@ -128,15 +123,14 @@ void FFTConvolver::clear()
   _current = 0;
   _inputBuffer.clear();
   _inputBufferFill = 0;
-  _preMultiplyAddPairs.clear();
 }
 
   
-bool FFTConvolver::init(size_t blockSize, const Sample* ir, size_t irLen, MultiplyAddEngine* muliplyAddEngine)
+bool FFTConvolver::init(size_t blockSize, const Sample* ir, size_t irLen)
 {
-  clear();
+  reset();
 
-  if (blockSize == 0 || !muliplyAddEngine)
+  if (blockSize == 0)
   {
     return false;
   }
@@ -190,18 +184,71 @@ bool FFTConvolver::init(size_t blockSize, const Sample* ir, size_t irLen, Multip
   // Reset current position
   _current = 0;
   
-  // Prepare pre-multiply-add
-  _multiplyAddEngine = muliplyAddEngine;
-  _multiplyAddEngine->init(_segmentsIR);
-  if (_segCount >= 2)
-  {
-    _preMultiplyAddPairs.resize(_segCount-2);
-  }
-  
   return true;
 }
 
 
+void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
+{
+  if (_segCount == 0)
+  {
+    ::memset(output, 0, len * sizeof(Sample));
+    return;
+  }
+
+  size_t processed = 0;
+  while (processed < len)
+  {
+    const bool inputBufferWasEmpty = (_inputBufferFill == 0);
+    const size_t processing = std::min(len-processed, _blockSize-_inputBufferFill);
+    const size_t inputBufferPos = _inputBufferFill;
+    ::memcpy(_inputBuffer+inputBufferPos, input+processed, processing * sizeof(Sample));
+
+    // Forward FFT
+    internal::CopyAndPad(_fftBuffer, &_inputBuffer[0], _blockSize); 
+    _fft.fft(_fftBuffer, _segments[_current]->re(), _segments[_current]->im());
+
+    // Complex multiplication
+    if (inputBufferWasEmpty)
+    {
+      _preMultiplied.setZero();
+      for (size_t i=2; i<_segCount; ++i)
+      {
+        const size_t indexIr = i;
+        const size_t indexAudio = (_current + i) % _segCount;
+        multiplyAdd(_preMultiplied, *_segmentsIR[indexIr], *_segments[indexAudio]);
+      }
+    }
+    _conv.copyFrom(_preMultiplied);
+    multiplyAdd(_conv, *_segments[_current], *_segmentsIR[0]);
+
+    // Backward FFT
+    _fft.ifft(_fftBuffer, _conv.re(), _conv.im());
+
+    // Add overlap
+    internal::Sum(output+processed, _fftBuffer+inputBufferPos, _overlap+inputBufferPos, processing);
+
+    // Input buffer full => Next block
+    _inputBufferFill += processing;
+    if (_inputBufferFill == _blockSize)
+    {
+      // Input buffer is empty again now
+      _inputBuffer.setZero();
+      _inputBufferFill = 0;
+
+      // Save the overlap
+      ::memcpy(_overlap, _fftBuffer + _blockSize, _blockSize * sizeof(Sample));
+
+      // Update current segment
+      _current = (_current > 0) ? (_current - 1) : (_segCount - 1);
+    }
+
+    processed += processing;
+  }
+}
+
+
+/*
 void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
 {
   if (_segCount == 0)
@@ -231,7 +278,7 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
       }
       if (_segCount >= 2)
       {
-        _preMultiplied.copyFrom(_multiplyAddEngine->getResult());
+        _preMultiplied.copyFrom(_multiplyAddEngine.getResult());
         multiplyAdd(_preMultiplied, *_segments[(_current + 1) % _segCount], *_segmentsIR[1]);
       }
     }
@@ -256,7 +303,7 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
       ::memcpy(_overlap, _fftBuffer + _blockSize, _blockSize * sizeof(Sample));
       
       // Update current segment
-      _multiplyAddEngine->setAudio(_current, *_segments[_current]);
+      _multiplyAddEngine.setAudio(_current, *_segments[_current]);
       _current = (_current > 0) ? (_current - 1) : (_segCount - 1);
       
       // Trigger pre-calculation
@@ -267,13 +314,14 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
           _preMultiplyAddPairs[i-2].indexIr = i;
           _preMultiplyAddPairs[i-2].indexAudio = (_current + i) % _segCount;
         }
-        _multiplyAddEngine->multiplyAdd(_preMultiplyAddPairs);
+        _multiplyAddEngine.multiplyAdd(_preMultiplyAddPairs);
       }
     }
     
     processed += processing;
   }
 }
+*/
   
   
 void FFTConvolver::multiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b) const
