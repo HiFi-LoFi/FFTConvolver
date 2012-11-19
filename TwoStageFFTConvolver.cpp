@@ -157,7 +157,7 @@ void TwoStageFFTConvolver::process(const Sample* input, Sample* output, size_t l
   _headConvolver.process(input, output, len);
 
   // Tail
-  if (_tailBlockSize > 0)
+  if (_tailInput.size() > 0)
   {
     size_t processed = 0;
     while (processed < len)
@@ -195,43 +195,38 @@ void TwoStageFFTConvolver::process(const Sample* input, Sample* output, size_t l
         _precalculatedPos += processing;
       }
 
-      // Tail convolution
-      if (_tailInput.size() > 0)
+      // Fill input buffer for tail convolution
+      ::memcpy(_tailInput.data()+_tailInputFill, input+processed, processing * sizeof(Sample));
+      _tailInputFill += processing;
+      assert(_tailInputFill <= _tailBlockSize);
+
+      // Convolution: 1st tail block
+      if (_tailPrecalculated0.size() > 0 && _tailInputFill % _headBlockSize == 0)
       {
-        // Fill input buffer
-        ::memcpy(_tailInput+_tailInputFill, input+processed, processing * sizeof(Sample));
-        _tailInputFill += processing;
-        assert(_tailInputFill <= _tailBlockSize);
-
-        // Swap precalculation buffers (if previous buffer was consumed)
+        assert(_tailInputFill >= _headBlockSize);
+        const size_t blockOffset = _tailInputFill - _headBlockSize;
+        _tailConvolver0.process(_tailInput.data()+blockOffset, _tailOutput0.data()+blockOffset, _headBlockSize);
         if (_tailInputFill == _tailBlockSize)
-        {
-          waitForBackgroundProcessing();
+        {          
           SampleBuffer::Swap(_tailPrecalculated0, _tailOutput0);
-          SampleBuffer::Swap(_tailPrecalculated, _tailOutput);
-        }
-
-        // Convolution: 1st tail block
-        if (_tailPrecalculated0.size() > 0 && _tailInputFill % _headBlockSize == 0)
-        {
-          assert(_tailInputFill >= _headBlockSize);
-          const size_t blockOffset = _tailInputFill - _headBlockSize;
-          _tailConvolver0.process(_tailInput+blockOffset, _tailOutput0+blockOffset, _headBlockSize);
-        }
-
-        // Convolution: 2nd-Nth tail block (might be done in some background thread)
-        if (_tailPrecalculated.size() > 0 && _tailInputFill == _tailBlockSize)
-        {
-          _backgroundProcessingInput.copyFrom(_tailInput);
-          startBackgroundProcessing();
-        }
-
-        if (_tailInputFill == _tailBlockSize)
-        {
-          _tailInputFill = 0;
-          _precalculatedPos = 0;
         }
       }
+
+      // Convolution: 2nd-Nth tail block (might be done in some background thread)
+      if (_tailPrecalculated.size() > 0 && _tailInputFill == _tailBlockSize)
+      {
+        waitForBackgroundProcessing();
+        SampleBuffer::Swap(_tailPrecalculated, _tailOutput);
+        _backgroundProcessingInput.copyFrom(_tailInput);
+        startBackgroundProcessing();
+      }
+        
+      if (_tailInputFill == _tailBlockSize)
+      {
+        _tailInputFill = 0;
+        _precalculatedPos = 0;
+      }
+
       processed += processing;
     }
   }
@@ -240,12 +235,18 @@ void TwoStageFFTConvolver::process(const Sample* input, Sample* output, size_t l
 
 void TwoStageFFTConvolver::startBackgroundProcessing()
 {
-  _tailConvolver.process(_backgroundProcessingInput, _tailOutput, _tailBlockSize);
+  doBackgroundProcessing();
 }
 
 
 void TwoStageFFTConvolver::waitForBackgroundProcessing()
 {
+}
+
+
+void TwoStageFFTConvolver::doBackgroundProcessing()
+{
+  _tailConvolver.process(_backgroundProcessingInput.data(), _tailOutput.data(), _tailBlockSize);
 }
     
 } // End of namespace fftconvolver

@@ -1,4 +1,2 @@
-Builds/
-modules/
-JuceLibraryCode/
 *.exe
+*.xcodeproj

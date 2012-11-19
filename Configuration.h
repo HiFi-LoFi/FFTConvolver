@@ -47,7 +47,7 @@ template<typename T>
 T* AllocateBuffer(size_t size)
 {
 #if defined(FFTCONVOLVER_USE_SSE)
-  return static_cast<T*>(_mm_malloc(size * sizeof(T), 64));
+  return static_cast<T*>(_mm_malloc(size * sizeof(T), 16));
 #else
   return new(std::nothrow) T[size];
 #endif

@@ -43,8 +43,6 @@ public:
   void reset();
   
 private:
-  void multiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b) const;
-
   size_t _blockSize;
   size_t _segSize;
   size_t _segCount;

@@ -90,4 +90,12 @@ void MultiplyAdd(Sample* FFTCONVOLVER_RESTRICT re,
 #endif
 }
 
+
+void MultiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b)
+{
+  assert(result.size() == a.size());
+  assert(result.size() == b.size());
+  MultiplyAdd(result.re(), result.im(), a.re(), a.im(), b.re(), b.im(), result.size());
+}
+
 } // End of namespace fftconvolver

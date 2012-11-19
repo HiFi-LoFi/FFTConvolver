@@ -36,6 +36,8 @@ void MultiplyAdd(Sample* FFTCONVOLVER_RESTRICT re,
                  const Sample* FFTCONVOLVER_RESTRICT imB,
                  const size_t len);
 
+void MultiplyAdd(SplitComplex& result, const SplitComplex& a, const SplitComplex& b);
+
 } // End of namespace fftconvolver
 
 #endif // Header guard

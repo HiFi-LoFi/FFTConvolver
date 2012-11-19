@@ -39,6 +39,8 @@ protected:
   virtual void startBackgroundProcessing();
   virtual void waitForBackgroundProcessing();
 
+  void doBackgroundProcessing();
+
 private:
   size_t _headBlockSize;
   size_t _tailBlockSize;

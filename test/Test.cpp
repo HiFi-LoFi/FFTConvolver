@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 #include <vector>
 
 #include <cmath>
@@ -76,13 +77,13 @@ static bool TestConvolver(size_t inputSize,
   std::vector<fftconvolver::Sample> in(inputSize);
   for (size_t i=0; i<inputSize; ++i)
   {
-    in[i] = static_cast<float>(::cos(static_cast<double>(i)) * (1.0 / 123.0));
+    in[i] = 0.1f * static_cast<fftconvolver::Sample>(i+1);
   }
-  
+
   std::vector<fftconvolver::Sample> ir(irSize);
   for (size_t i=0; i<irSize; ++i)
   {
-    ir[i] = static_cast<float>(::sin(static_cast<float>(i) / 79.0));
+    ir[i] = 0.1f * static_cast<fftconvolver::Sample>(i+1);
   }
   
   // Simple convolver
@@ -92,7 +93,7 @@ static bool TestConvolver(size_t inputSize,
     SimpleConvolve(&in[0], in.size(), &ir[0], ir.size(), &outSimple[0]);
   }
   
-  // Orgami convolver
+  // FFT convolver
   std::vector<fftconvolver::Sample> out(in.size() + ir.size() - 1, fftconvolver::Sample(0.0));
   {
     fftconvolver::FFTConvolver convolver;
@@ -126,22 +127,28 @@ static bool TestConvolver(size_t inputSize,
   if (refCheck)
   {
     size_t diffSamples = 0;
+    const double absTolerance = 0.001 * static_cast<double>(ir.size());
+    const double relTolerance = 0.0001 * ::log(static_cast<double>(ir.size()));
     for (size_t i=0; i<outSimple.size(); ++i)
-    {
-      const fftconvolver::Sample a = out[i];
-      const fftconvolver::Sample b = outSimple[i];
-      
-      if (::fabs(a-b) > 0.05)
+    {      
+      const double a = static_cast<double>(out[i]);
+      const double b = static_cast<double>(outSimple[i]);
+      if (::fabs(a) > 1.0 && ::fabs(b) > 1.0)
       {
-        ++diffSamples;
+        const double absError = ::fabs(a-b);
+        const double relError = absError / b;
+        if (relError > relTolerance && absError > absTolerance)
+        {
+          ++diffSamples;
+        }
       }
     }
-    printf("Correctness Test (2-stage, input %d, IR %d, blocksize %d-%d) => %s\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax), (diffSamples == 0) ? "[OK]" : "[FAILED]");
+    printf("Correctness Test (input %d, IR %d, blocksize %d-%d) => %s\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax), (diffSamples == 0) ? "[OK]" : "[FAILED]");
     return (diffSamples == 0);
   }
   else
   {
-    printf("Performance Test (2-stage, input %d, IR %d, blocksize %d-%d) => Completed\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax));
+    printf("Performance Test (input %d, IR %d, blocksize %d-%d) => Completed\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax));
     return true;
   }
 }
@@ -159,13 +166,13 @@ static bool TestTwoStageConvolver(size_t inputSize,
   std::vector<fftconvolver::Sample> in(inputSize);
   for (size_t i=0; i<inputSize; ++i)
   {
-    in[i] = static_cast<float>(::cos(static_cast<double>(i)) * (1.0 / 123.0));
+    in[i] = 0.1f * static_cast<fftconvolver::Sample>(i+1);
   }
-  
+
   std::vector<fftconvolver::Sample> ir(irSize);
   for (size_t i=0; i<irSize; ++i)
   {
-    ir[i] = static_cast<float>(::sin(static_cast<float>(i) / 79.0));
+    ir[i] = 0.1f * static_cast<fftconvolver::Sample>(i+1);
   }
   
   // Simple convolver
@@ -209,14 +216,20 @@ static bool TestTwoStageConvolver(size_t inputSize,
   if (refCheck)
   {
     size_t diffSamples = 0;
+    const double absTolerance = 0.001 * static_cast<double>(ir.size());
+    const double relTolerance = 0.0001 * ::log(static_cast<double>(ir.size()));   
     for (size_t i=0; i<outSimple.size(); ++i)
-    {
-      const fftconvolver::Sample a = out[i];
-      const fftconvolver::Sample b = outSimple[i];
-      
-      if (::fabs(a-b) > 0.05)
+    {      
+      const double a = static_cast<double>(out[i]);
+      const double b = static_cast<double>(outSimple[i]);
+      if (::fabs(a) > 1.0 && ::fabs(b) > 1.0)
       {
-        ++diffSamples;
+        const double absError = ::fabs(a-b);
+        const double relError = absError / b;
+        if (relError > relTolerance && absError > absTolerance)
+        {
+          ++diffSamples;
+        }
       }
     }
     printf("Correctness Test (2-stage, input %d, IR %d, blocksize %d-%d) => %s\n", static_cast<int>(inputSize), static_cast<int>(irSize), static_cast<int>(blockSizeMin), static_cast<int>(blockSizeMax), (diffSamples == 0) ? "[OK]" : "[FAILED]");
@@ -233,7 +246,7 @@ static bool TestTwoStageConvolver(size_t inputSize,
 #define TEST_CORRECTNESS
 //#define TEST_PERFORMANCE
 
-//#define TEST_FFTCONVOLVER
+#define TEST_FFTCONVOLVER
 #define TEST_TWOSTAGEFFTCONVOLVER
 
 
@@ -267,7 +280,7 @@ int main()
   TestConvolver(100000, 1234, 100,  512,  512, true);
   TestConvolver(100000, 1234, 100, 1024, 1024, true);
   TestConvolver(100000, 1234, 100, 2048, 2048, true);
-  
+
   TestConvolver(100000, 4321, 100,  128,  128, true);
   TestConvolver(100000, 4321, 100,  256,  256, true);
   TestConvolver(100000, 4321, 100,  512,  512, true);
@@ -279,8 +292,7 @@ int main()
 #if defined(TEST_PERFORMANCE) && defined(TEST_FFTCONVOLVER)
   TestConvolver(3*60*44100, 20*44100, 50, 100, 1024, false);
 #endif
-
-
+  
 #if defined(TEST_CORRECTNESS) && defined(TEST_TWOSTAGEFFTCONVOLVER)
   TestTwoStageConvolver(1, 1, 1, 1, 1, 1, true);
   TestTwoStageConvolver(2, 2, 2, 2, 2, 2, true);
