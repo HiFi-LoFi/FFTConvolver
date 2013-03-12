@@ -26,7 +26,7 @@
 
 #include "../FFTConvolver.h"
 #include "../TwoStageFFTConvolver.h"
-#include "../MultiplyAdd.h"
+#include "../Utilities.h"
 
 
 template<typename T>

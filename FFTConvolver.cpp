@@ -17,52 +17,16 @@
 
 #include "FFTConvolver.h"
 
-#include "Buffer.h"
-#include "Configuration.h"
-
 #include <cassert>
 #include <cmath>
 
+#if defined (FFTCONVOLVER_USE_SSE)
+  #include <xmmintrin.h>
+#endif
+
 
 namespace fftconvolver
-{
-
-namespace internal
-{
-
-template<typename T>
-T NextPowerOf2(const T& val)
-{
-  T nextPowerOf2 = 1;
-  while (nextPowerOf2 < val)
-  {
-    nextPowerOf2 *= 2;
-  }
-  return nextPowerOf2;
-}
-  
-  
-template<typename T>
-void Sum(T* FFTCONVOLVER_RESTRICT result, const T* FFTCONVOLVER_RESTRICT a, const T* FFTCONVOLVER_RESTRICT b, size_t len)
-{
-  for (size_t i=0; i<len; ++i)
-  {
-    result[i] = a[i] + b[i];
-  }
-}
-
-
-template<typename T>
-void CopyAndPad(Buffer<T>& dest, const T* src, size_t srcSize)
-{
-  assert(dest.size() >= srcSize);
-  ::memcpy(dest.data(), src, srcSize * sizeof(T));
-  ::memset(dest.data() + srcSize, 0, (dest.size()-srcSize) * sizeof(T)); 
-}
-
-} // End of namespace internal
-
-  
+{  
 
 FFTConvolver::FFTConvolver() :
   _blockSize(0),
@@ -134,7 +98,7 @@ bool FFTConvolver::init(size_t blockSize, const Sample* ir, size_t irLen)
     return true;
   }
   
-  _blockSize = internal::NextPowerOf2(blockSize);
+  _blockSize = NextPowerOf2(blockSize);
   _segSize = 2 * _blockSize;
   _segCount = static_cast<size_t>(::ceil(static_cast<float>(irLen) / static_cast<float>(_blockSize)));
   _fftComplexSize = audiofft::AudioFFT::ComplexSize(_segSize);
@@ -155,7 +119,7 @@ bool FFTConvolver::init(size_t blockSize, const Sample* ir, size_t irLen)
     SplitComplex* segment = new SplitComplex(_fftComplexSize);
     const size_t remaining = irLen - (i * _blockSize);
     const size_t sizeCopy = (remaining >= _blockSize) ? _blockSize : remaining;
-    internal::CopyAndPad(_fftBuffer, &ir[i*_blockSize], sizeCopy);
+    CopyAndPad(_fftBuffer, &ir[i*_blockSize], sizeCopy);
     _fft.fft(_fftBuffer.data(), segment->re(), segment->im());
     _segmentsIR.push_back(segment);
   }
@@ -193,7 +157,7 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
     ::memcpy(_inputBuffer.data()+inputBufferPos, input+processed, processing * sizeof(Sample));
 
     // Forward FFT
-    internal::CopyAndPad(_fftBuffer, &_inputBuffer[0], _blockSize); 
+    CopyAndPad(_fftBuffer, &_inputBuffer[0], _blockSize); 
     _fft.fft(_fftBuffer.data(), _segments[_current]->re(), _segments[_current]->im());
 
     // Complex multiplication
@@ -204,17 +168,17 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
       {
         const size_t indexIr = i;
         const size_t indexAudio = (_current + i) % _segCount;
-        MultiplyAdd(_preMultiplied, *_segmentsIR[indexIr], *_segments[indexAudio]);
+        ComplexMultiplyAccumulate(_preMultiplied, *_segmentsIR[indexIr], *_segments[indexAudio]);
       }
     }
     _conv.copyFrom(_preMultiplied);
-    MultiplyAdd(_conv, *_segments[_current], *_segmentsIR[0]);
+    ComplexMultiplyAccumulate(_conv, *_segments[_current], *_segmentsIR[0]);
 
     // Backward FFT
     _fft.ifft(_fftBuffer.data(), _conv.re(), _conv.im());
 
     // Add overlap
-    internal::Sum(output+processed, _fftBuffer.data()+inputBufferPos, _overlap.data()+inputBufferPos, processing);
+    Sum(output+processed, _fftBuffer.data()+inputBufferPos, _overlap.data()+inputBufferPos, processing);
 
     // Input buffer full => Next block
     _inputBufferFill += processing;
