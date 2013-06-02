@@ -18,6 +18,7 @@
 #include "TwoStageFFTConvolver.h"
 
 #include <algorithm>
+#include <cmath>
 
 
 namespace fftconvolver

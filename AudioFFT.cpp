@@ -1,24 +1,29 @@
 // ==================================================================================
-// Copyright (c) 2012 HiFi-LoFi
+// Copyright (c) 2013 HiFi-LoFi
 //
-// This is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is furnished
+// to do so, subject to the following conditions:
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // ==================================================================================
 
 #include "AudioFFT.h"
 
 #include <cassert>
 #include <cmath>
+#include <cstring>
 
 
 namespace audiofft
@@ -30,9 +35,36 @@ namespace internal
   {
     return (val == 1 || (val & (val-1)) == 0);
   }
+
+
+  template<typename TypeDest, typename TypeSrc>
+  void ConvertBuffer(TypeDest* dest, const TypeSrc* src, size_t len)
+  {
+    for (size_t i=0; i<len; ++i)
+    {
+      dest[i] = static_cast<TypeDest>(src[i]);
+    }
+  }
+
+  
+  template<typename TypeDest, typename TypeSrc, typename TypeFactor>
+  void ScaleBuffer(TypeDest* dest, const TypeSrc* src, const TypeFactor factor, size_t len)
+  {    
+    for (size_t i=0; i<len; ++i)
+    {
+      dest[i] = static_cast<TypeDest>(static_cast<TypeFactor>(src[i]) * factor);
+    }
+  }
+
 } // End of namespace internal
   
+  
+// ================================================================
+  
 
+#ifdef AUDIOFFT_OOURA_USED
+
+  
 OouraFFT::OouraFFT() :
   AudioFFTBase(),
   _size(0),
@@ -64,19 +96,11 @@ void OouraFFT::init(size_t size)
 void OouraFFT::fft(const float* data, float* re, float* im)
 {
   // Convert into the format as required by the Ooura FFT
-  {
-    double* b = &_buffer[0];
-    double* bEnd = b + _size;
-    const float *d = data;
-    while (b != bEnd)
-    {
-      *(b++) = static_cast<double>(*(d++));
-    }
-  }
-  
+  internal::ConvertBuffer(&_buffer[0], data, _size);
+
   rdft(static_cast<int>(_size), +1, _buffer.data(), _ip.data(), _w.data());
   
-  // Convert to split-complex
+  // Convert back to split-complex
   {
     double* b = &_buffer[0];
     double* bEnd = b + _size;
@@ -112,18 +136,9 @@ void OouraFFT::ifft(float* data, const float* re, const float* im)
   }
 
   rdft(static_cast<int>(_size), -1, _buffer.data(), _ip.data(), _w.data());
-
-  // Scaling and data type conversion
-  {
-    const double factor = 2.0 / static_cast<double>(_size);
-    double* b = &_buffer[0];
-    double* bEnd = b + _size;
-    float *d = data;
-    while (b != bEnd)
-    {
-      *(d++) = static_cast<float>(*(b++) * factor);
-    }
-  }
+  
+  // Convert back to split-complex
+  internal::ScaleBuffer(data, &_buffer[0], 2.0 / static_cast<double>(_size), _size);
 }
 
 
@@ -701,11 +716,14 @@ void OouraFFT::rftbsub(int n, double *a, int nc, double *c)
   }
   a[m + 1] = -a[m + 1];
 }
+
+#endif // AUDIOFFT_OOURA_USED
   
   
-// ====================================================================
+// ================================================================
+
   
-#if defined(AUDIOFFT_APPLE_ACCELERATE)
+#ifdef AUDIOFFT_APPLE_ACCELERATE_USED
   
 AppleAccelerateFFT::AppleAccelerateFFT() :
   _size(0),
@@ -719,7 +737,7 @@ AppleAccelerateFFT::AppleAccelerateFFT() :
 
 AppleAccelerateFFT::~AppleAccelerateFFT()
 {
-  vDSP_destroy_fftsetup(_fftSetup);
+  AppleAccelerateFFT::init(0);
 }
 
 
@@ -760,12 +778,12 @@ void AppleAccelerateFFT::fft(const float* data, float* re, float* im)
   splitComplex.imagp = im;
   vDSP_ctoz(reinterpret_cast<const COMPLEX*>(data), 2, &splitComplex, 1, size2);
   vDSP_fft_zrip(_fftSetup, &splitComplex, 1, _powerOf2, FFT_FORWARD);
-  const float factor = 0.5;
+  const float factor = 0.5f;
   vDSP_vsmul(re, 1, &factor, re, 1, size2);
   vDSP_vsmul(im, 1, &factor, im, 1, size2);
   re[size2] = im[0];
-  im[0] = 0.0;
-  im[size2] = 0.0;
+  im[0] = 0.0f;
+  im[size2] = 0.0f;
 }
 
   
@@ -784,6 +802,105 @@ void AppleAccelerateFFT::ifft(float* data, const float* re, const float* im)
   vDSP_vsmul(data, 1, &factor, data, 1, _size);
 }
  
-#endif // AUDIOFFT_APPLE_ACCELERATE
+
+#endif // AUDIOFFT_APPLE_ACCELERATE_USED
+
+
+// ================================================================
+
+  
+#ifdef AUDIOFFT_FFTW3_USED
+
+
+FFTW3FFT::FFTW3FFT() :
+  _size(0),
+  _complexSize(0),
+  _planForward(0),
+  _planBackward(0),
+  _data(0),
+  _re(0),
+  _im(0)
+{
+}
+  
+
+FFTW3FFT::~FFTW3FFT()
+{
+  FFTW3FFT::init(0);
+}
+
+
+void FFTW3FFT::init(size_t size)
+{
+  assert(internal::IsPowerOf2(size));
+  
+  if (_size != size)
+  {
+    if (_size > 0)
+    {
+      fftwf_destroy_plan(_planForward);
+      fftwf_destroy_plan(_planBackward);
+      _planForward = 0;
+      _planBackward = 0;
+      _size = 0;
+      _complexSize = 0;
+      
+      if (_data)
+      {
+        fftwf_free(_data);
+        _data = 0;
+      }
+      
+      if (_re)
+      {
+        fftwf_free(_re);
+        _re = 0;
+      }
+      
+      if (_im)
+      {
+        fftwf_free(_im);
+        _im = 0;
+      }
+    }
+    
+    if (size > 0)
+    {
+      _size = size;
+      _complexSize = ComplexSize(_size);
+      const size_t complexSize = ComplexSize(_size);
+      _data = reinterpret_cast<float*>(fftwf_malloc(_size * sizeof(float)));
+      _re = reinterpret_cast<float*>(fftwf_malloc(complexSize * sizeof(float)));
+      _im = reinterpret_cast<float*>(fftwf_malloc(complexSize * sizeof(float)));
+      
+      fftw_iodim dim;
+      dim.n = static_cast<int>(size);
+      dim.is = 1;
+      dim.os = 1;
+      _planForward = fftwf_plan_guru_split_dft_r2c(1, &dim, 0, 0, _data, _re, _im, FFTW_MEASURE);
+      _planBackward = fftwf_plan_guru_split_dft_c2r(1, &dim, 0, 0, _re, _im, _data, FFTW_MEASURE);      
+    }
+  }
+}
+
+  
+void FFTW3FFT::fft(const float* data, float* re, float* im)
+{
+  ::memcpy(_data, data, _size * sizeof(float));
+  fftwf_execute_split_dft_r2c(_planForward, _data, _re, _im);
+  ::memcpy(re, _re, _complexSize * sizeof(float));
+  ::memcpy(im, _im, _complexSize * sizeof(float));
+}
+
+  
+void FFTW3FFT::ifft(float* data, const float* re, const float* im)
+{
+  ::memcpy(_re, re, _complexSize * sizeof(float));
+  ::memcpy(_im, im, _complexSize * sizeof(float));
+  fftwf_execute_split_dft_c2r(_planBackward, _re, _im, _data);
+  internal::ScaleBuffer(data, _data, 1.0f / static_cast<float>(_size), _size);
+}
+
+#endif // AUDIOFFT_FFTW3_USED
 
 } // End of namespace
