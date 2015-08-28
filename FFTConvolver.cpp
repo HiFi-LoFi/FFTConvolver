@@ -157,8 +157,15 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
     ::memcpy(_inputBuffer.data()+inputBufferPos, input+processed, processing * sizeof(Sample));
 
     // Forward FFT
-    CopyAndPad(_fftBuffer, &_inputBuffer[0], _blockSize); 
-    _fft.fft(_fftBuffer.data(), _segments[_current]->re(), _segments[_current]->im());
+    if (processing != processed)
+    { 
+      CopyAndPad(_fftBuffer, &_inputBuffer[0], _blockSize); 
+      _fft.fft(_fftBuffer.data(), _segments[_current]->re(), _segments[_current]->im());
+    }
+    else
+    {
+      _segments[_current].setZero();
+    }
 
     // Complex multiplication
     if (inputBufferWasEmpty)
@@ -172,7 +179,11 @@ void FFTConvolver::process(const Sample* input, Sample* output, size_t len)
       }
     }
     _conv.copyFrom(_preMultiplied);
-    ComplexMultiplyAccumulate(_conv, *_segments[_current], *_segmentsIR[0]);
+    
+    if (processing != processed)
+    { 
+      ComplexMultiplyAccumulate(_conv, *_segments[_current], *_segmentsIR[0]);
+    }
 
     // Backward FFT
     _fft.ifft(_fftBuffer.data(), _conv.re(), _conv.im());
