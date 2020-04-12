@@ -33,6 +33,9 @@
 #elif defined (AUDIOFFT_FFTW3)
   #define AUDIOFFT_FFTW3_USED
   #include <fftw3.h>
+#elif defined (AUDIOFFT_PFFFT)
+  #define AUDIOFFT_PFFFT_USED
+  #include <pffft/pffft.h>
 #else
   #if !defined(AUDIOFFT_OOURA)
     #define AUDIOFFT_OOURA
@@ -875,6 +878,81 @@ namespace audiofft
 
 
 #endif // AUDIOFFT_APPLE_ACCELERATE_USED
+
+    // ================================================================
+    
+    
+#ifdef AUDIOFFT_PFFFT_USED
+    
+class PFFFTFFT : public detail::AudioFFTImpl
+{
+public:
+    PFFFTFFT() : detail::AudioFFTImpl() {}
+    
+    PFFFTFFT(const PFFFTFFT&) = delete;
+    PFFFTFFT& operator=(const PFFFTFFT&) = delete;
+    
+    virtual ~PFFFTFFT() {
+        if (setup) pffft_destroy_setup(setup);
+        if (cmplx) pffft_aligned_free(cmplx);
+    }
+    
+    void init(size_t size) override {
+        assert((size & (size - 1)) == 0); // power of two check
+        if (setup) {
+            pffft_destroy_setup(setup);
+            setup = nullptr;
+        }
+        if (cmplx) {
+            pffft_aligned_free(cmplx);
+            cmplx = nullptr;
+        }
+        if (n != size) {
+            n = (int)size;
+            if (n > 0) {
+                setup = pffft_new_setup((int)n, PFFFT_REAL);
+                cmplx = (float*)pffft_aligned_malloc(n*sizeof(float));
+            }
+        }
+    }
+    
+    void fft(const float* data, float* re, float* im) override {
+        pffft_transform_ordered(setup, data, cmplx, nullptr, PFFFT_FORWARD);
+        int n2 = n>>1;
+        int j = 1;
+        for (int i = 2; i < n; i += 2) {
+            re[j] = cmplx[i];
+            im[j] = cmplx[i + 1];
+            j++;
+        }
+        re[0] = cmplx[0]; im[0] = 0.f;
+        re[n2] = cmplx[1]; im[n2] = 0.f;
+   }
+    
+    void ifft(float* data, const float* re, const float* im) override {
+        int n2 = n>>1;
+        int j = 1;
+        for (int i = 2; i < n; i += 2) {
+            cmplx[i] = re[j];
+            cmplx[i + 1] = im[j];
+            j++;
+        }
+        cmplx[0] = re[0]; // dc magnitude
+        cmplx[1] = re[n2]; // nyquist magnitude
+        
+        pffft_transform_ordered(setup, cmplx, data, nullptr, PFFFT_BACKWARD);
+        detail::ScaleBuffer(data, data, 1.0f/float(2*n), (size_t)n);
+    }
+    
+private:
+    PFFFT_Setup* setup = nullptr;
+    float* cmplx = nullptr; // interleaved complex buffer
+    int n = 0;
+};
+
+typedef PFFFTFFT AudioFFTImplementation;
+
+#endif // AUDIOFFT_PFFFT_USED
 
 
   // ================================================================
