@@ -941,7 +941,7 @@ public:
         cmplx[1] = re[n2]; // nyquist magnitude
         
         pffft_transform_ordered(setup, cmplx, data, nullptr, PFFFT_BACKWARD);
-        detail::ScaleBuffer(data, data, 1.0f/float(2*n), (size_t)n);
+        detail::ScaleBuffer(data, data, 1.0f/float(n), (size_t)n);
     }
     
 private:
