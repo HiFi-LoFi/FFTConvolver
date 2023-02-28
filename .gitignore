@@ -1,2 +1,5 @@
 *.exe
 *.xcodeproj
+
+# CMake build directories
+build*/
