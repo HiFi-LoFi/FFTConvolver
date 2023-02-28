@@ -16,6 +16,9 @@ Use [CMake](https://cmake.org) to generate the project, e.g.:
 ```sh
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Or enable SSE optimizations (OFF by default)
+cmake .. -DCMAKE_BUILD_TYPE=Release -DFFTCONVOLVER_USE_SSE=ON
 ```
 
 You can build the project by using the generated build files directly, or by
